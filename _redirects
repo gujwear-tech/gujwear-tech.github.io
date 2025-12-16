@@ -1,0 +1,14 @@
+# GujWear Redirects Configuration
+# Redirect all traffic to HTTPS
+http://www.gujwear.live/* https://www.gujwear.live/:splat 301!
+http://gujwear.live/* https://www.gujwear.live/:splat 301!
+
+# Redirect from github pages to custom domain (if needed)
+http://gujwear-tech.github.io/* https://www.gujwear.live/:splat 301!
+https://gujwear-tech.github.io/* https://www.gujwear.live/:splat 301!
+
+# API proxying rules (uncomment if needed)
+# /api/* :splat 200
+
+# Single page app fallback
+/* /index.html 200

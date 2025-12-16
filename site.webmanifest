@@ -1,0 +1,63 @@
+{
+  "name": "GujWear — Premium Men's Shirts",
+  "short_name": "GujWear",
+  "description": "Authentic style and premium men's shirts. Launching January 1st, 2026.",
+  "start_url": "https://www.gujwear.live/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#ff6b35",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/favicon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/assets/screenshot.png",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
+  "categories": ["shopping", "business"],
+  "orientation": "portrait-primary",
+  "shortcuts": [
+    {
+      "name": "Subscribe",
+      "short_name": "Subscribe",
+      "description": "Subscribe to get notified when GujWear launches",
+      "url": "https://www.gujwear.live/#subscribe",
+      "icons": [
+        {
+          "src": "/favicon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

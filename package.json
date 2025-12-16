@@ -27,7 +27,9 @@
     "nodemailer": "^6.9.4",
     "uuid": "^9.0.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "sharp": "^0.34.5"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/gujwear-tech/gujwear-tech.github.io"
