@@ -70,7 +70,7 @@ function isValidEmail(email) {
 // === CUSTOM EMAIL TEMPLATE (With Logo & Insta) ===
 function getEmailTemplate(verifyUrl) {
   // Ensure 'assets/logo.svg' exists in your project for this to work perfectly in production
-  const logoUrl = 'https://www.gujwear.live/assets/logo.svg'; 
+  const logoUrl = 'https://www.gujwear.live/assets/logo.png'; 
   const instaUrl = 'https://www.instagram.com/gujwear';
 
   return {
@@ -99,7 +99,7 @@ function getEmailTemplate(verifyUrl) {
         <body>
           <div class="container">
             <div class="header">
-              <img src="${logoUrl}" alt="GujWear Logo">
+              <img src="${logoUrl}" alt="GujWear Logo" />
               <h1>GujWear</h1>
             </div>
             <div class="content">
