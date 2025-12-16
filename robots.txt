@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Allow: /api/health
+Disallow: /api/admin/
+Disallow: /node_modules/
+
+Sitemap: https://gujwear-tech.github.io/sitemap.xml
