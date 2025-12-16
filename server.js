@@ -1,23 +1,34 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const nodemailer = require('nodemailer');
+const { createClient } = require('@supabase/supabase-js');
 
 // === CONFIG ===
 const PORT = process.env.PORT || 3000;
-const DB_PATH = path.join(__dirname, 'subscriptions.json');
-const TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
-const RATE_LIMIT = {}; // in-memory rate limiting
+const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+const RATE_LIMIT = {}; // In-memory rate limiting (Note: Resets on serverless cold start)
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PRODUCTION = NODE_ENV === 'production';
+
+// === SUPABASE SETUP ===
+// Make sure SUPABASE_URL and SUPABASE_KEY are in your .env file
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+const supabase = (supabaseUrl && supabaseKey) 
+  ? createClient(supabaseUrl, supabaseKey) 
+  : null;
+
+if (!supabase) {
+  console.warn('⚠️ WARNING: Supabase credentials missing. Database features will fail.');
+}
 
 // === LOGGER ===
 const log = (level, msg, data = '') => {
   const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${level}: ${msg}`, data);
+  console.log(`[${timestamp}] ${level}: ${msg}`, data ? JSON.stringify(data) : '');
 };
 
 // === APP SETUP ===
@@ -38,45 +49,21 @@ app.use((req, res, next) => {
 
 // Compression & CORS
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
-app.use(express.json({ limit: '10kb' })); // limit payload size
+app.use(express.json({ limit: '10kb' })); 
 app.use(express.urlencoded({ limit: '10kb', extended: false }));
 
-// Static file serving with caching
+// Static file serving
 app.use(express.static(path.join(__dirname, '/'), {
   maxAge: IS_PRODUCTION ? '1d' : '0',
   etag: false,
 }));
 
-// === DATABASE HELPERS ===
-function readDB() {
-  try {
-    const data = fs.readFileSync(DB_PATH, 'utf8');
-    return JSON.parse(data || '[]');
-  } catch (e) {
-    log('ERROR', 'Failed to read DB', e.message);
-    return [];
-  }
-}
-
-function writeDB(data) {
-  try {
-    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-  } catch (e) {
-    log('ERROR', 'Failed to write DB', e.message);
-  }
-}
-
 // === RATE LIMITER ===
 function checkRateLimit(ip) {
   const now = Date.now();
   if (!RATE_LIMIT[ip]) RATE_LIMIT[ip] = [];
-  
-  // Clean old entries (older than 1 hour)
   RATE_LIMIT[ip] = RATE_LIMIT[ip].filter(t => now - t < 60 * 60 * 1000);
-  
-  // Allow 5 requests per hour per IP
   if (RATE_LIMIT[ip].length >= 5) return false;
-  
   RATE_LIMIT[ip].push(now);
   return true;
 }
@@ -115,60 +102,27 @@ function getEmailTemplate(verifyUrl, email) {
       <!DOCTYPE html>
       <html>
         <head>
-          <meta charset="utf-8">
           <style>
             body { font-family: 'Segoe UI', Roboto, sans-serif; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; }
-            .header { text-align: center; margin-bottom: 40px; }
-            .header h1 { color: #ff6b35; margin: 0; font-size: 28px; }
-            .content { background: #f5f5f5; padding: 30px; border-radius: 10px; text-align: center; }
-            .content p { margin: 16px 0; line-height: 1.6; }
             .button { 
-              display: inline-block; 
-              margin: 20px 0; 
-              padding: 14px 32px; 
+              display: inline-block; margin: 20px 0; padding: 14px 32px; 
               background: linear-gradient(135deg, #ff6b35 0%, #ff8a5c 100%);
-              color: white; 
-              text-decoration: none; 
-              border-radius: 8px; 
-              font-weight: 700;
-              transition: all 200ms ease;
+              color: white; text-decoration: none; border-radius: 8px; font-weight: 700;
             }
-            .button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(255, 107, 53, 0.3); }
-            .footer { text-align: center; font-size: 12px; color: #999; margin-top: 40px; }
           </style>
         </head>
         <body>
           <div class="container">
-            <div class="header">
-              <h1>GujWear</h1>
-              <p style="color: #999; margin: 0;">Authentic Style, GujWear Pride.</p>
-            </div>
-            <div class="content">
-              <h2 style="color: #333; margin-top: 0;">Verify Your Email</h2>
-              <p>Thanks for joining the GujWear community! To confirm your subscription, click the button below:</p>
-              <a href="${verifyUrl}" class="button">Verify My Email</a>
-              <p style="font-size: 12px; color: #999;">Or copy this link: <br><code>${verifyUrl}</code></p>
-              <p style="font-size: 12px; color: #999; margin-bottom: 0;">This link expires in 24 hours.</p>
-            </div>
-            <div class="footer">
-              <p>You received this email because you signed up at gujwear.com</p>
-              <p><a href="https://instagram.com/gujwear" style="color: #ff6b35; text-decoration: none;">Follow us on Instagram</a></p>
-            </div>
+            <h1 style="color: #ff6b35;">GujWear</h1>
+            <p>Thanks for joining! Click below to verify:</p>
+            <a href="${verifyUrl}" class="button">Verify My Email</a>
+            <p style="font-size: 12px; color: #999;">Link expires in 24 hours.</p>
           </div>
         </body>
       </html>
     `,
-    text: `
-      GujWear - Verify Your Email
-      
-      Thanks for joining GujWear! To confirm your subscription, visit this link:
-      ${verifyUrl}
-      
-      This link expires in 24 hours.
-      
-      Follow us on Instagram: https://instagram.com/gujwear
-    `,
+    text: `GujWear - Verify: ${verifyUrl}`,
   };
 }
 
@@ -176,289 +130,159 @@ function getEmailTemplate(verifyUrl, email) {
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, timestamp: new Date().toISOString(), smtpConfigured });
+  res.json({ ok: true, timestamp: new Date().toISOString(), smtpConfigured, db: !!supabase });
 });
 
 // Subscribe endpoint
 app.post('/api/subscribe', async (req, res) => {
   const ip = req.ip || req.connection.remoteAddress;
   
-  // Rate limiting
   if (!checkRateLimit(ip)) {
-    log('WARN', 'Rate limit exceeded', ip);
     return res.status(429).json({ error: 'Too many requests. Try again later.' });
   }
 
   const { email } = req.body || {};
-
-  // Validation
   if (!email || !isValidEmail(email)) {
-    log('WARN', 'Invalid email attempt', email);
     return res.status(400).json({ error: 'Please enter a valid email address.' });
   }
 
   try {
     const token = uuidv4();
-    const db = readDB();
-    const now = new Date().toISOString();
+    const tokenExpiry = new Date(Date.now() + TOKEN_EXPIRY_MS).toISOString();
+    const verifyUrl = `${req.protocol}://${req.get('host')}/api/verify?token=${token}`;
 
-    // Check if email already exists
-    const existing = db.find(s => s.email.toLowerCase() === email.toLowerCase());
-    if (existing) {
-      // Regenerate token and reset expiry
-      existing.token = token;
-      existing.tokenExpiry = new Date(Date.now() + TOKEN_EXPIRY).toISOString();
-      if (!existing.firstSubscribedAt) existing.firstSubscribedAt = now;
-      existing.lastAttemptAt = now;
+    // 1. Check if email exists in Supabase
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "not found"
+      throw fetchError;
+    }
+
+    // 2. Insert or Update
+    if (existingUser) {
+      await supabase
+        .from('subscriptions')
+        .update({ token, token_expiry: tokenExpiry, last_attempt_at: new Date() })
+        .eq('email', email);
       log('INFO', 'Email re-subscribed', email);
     } else {
-      // New subscription
-      db.push({
-        id: uuidv4(),
-        email,
-        token,
-        tokenExpiry: new Date(Date.now() + TOKEN_EXPIRY).toISOString(),
-        verified: false,
-        firstSubscribedAt: now,
-        lastAttemptAt: now,
-      });
+      await supabase
+        .from('subscriptions')
+        .insert([{ 
+          email, 
+          token, 
+          token_expiry: tokenExpiry, 
+          verified: false,
+          created_at: new Date() 
+        }]);
       log('INFO', 'New subscription', email);
     }
-    writeDB(db);
 
-    const verifyUrl = `${req.protocol}://${req.get('host')}/api/verify?token=${token}`;
-    const emailTemplate = getEmailTemplate(verifyUrl, email);
-    
-    // Send email if SMTP is configured
-    const ownerEmail = process.env.NOTIFY_EMAIL || process.env.SMTP_FROM || 'official@gujwear.live';
+    // 3. Send Email
     if (smtpConfigured && transporter) {
-      try {
-        // Send verification email to subscriber
-        await transporter.sendMail({
-          from: process.env.SMTP_FROM || 'noreply@gujwear.com',
-          to: email,
-          subject: emailTemplate.subject,
-          text: emailTemplate.text,
-          html: emailTemplate.html,
-        });
-        log('INFO', 'Verification email sent', email);
-
-        // Send owner notification (best-effort)
-        try {
-          await transporter.sendMail({
-            from: process.env.SMTP_FROM || 'noreply@gujwear.com',
-            to: ownerEmail,
-            subject: `New subscription: ${email} — GujWear`,
-            text: `New subscription:\n\nEmail: ${email}\nTime: ${new Date().toISOString()}\nIP: ${req.ip || req.connection.remoteAddress}`,
-            html: `<p>New subscription</p><p><strong>Email:</strong> ${email}</p><p><strong>Time:</strong> ${new Date().toISOString()}</p><p><strong>IP:</strong> ${req.ip || req.connection.remoteAddress}</p>`
-          });
-          log('INFO', 'Owner notification sent (subscribe)', email);
-        } catch (ownerErr) {
-          log('WARN', 'Failed to send owner notification (subscribe)', ownerErr.message);
-        }
-
-        return res.json({
-          ok: true,
-          message: 'Verification email sent! Check your inbox.',
-        });
-      } catch (err) {
-        log('ERROR', 'Failed to send email', `${email}: ${err.message}`);
-        return res.status(500).json({
-          ok: false,
-          error: 'Failed to send verification email. Please try again later.',
-        });
-      }
+      const emailTemplate = getEmailTemplate(verifyUrl, email);
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || 'noreply@gujwear.com',
+        to: email,
+        subject: emailTemplate.subject,
+        text: emailTemplate.text,
+        html: emailTemplate.html,
+      });
+      return res.json({ ok: true, message: 'Verification email sent! Check your inbox.' });
     }
 
-    // No SMTP — return verification URL for testing
-    log('WARN', 'SMTP disabled, returning test URL', email);
-    return res.json({
-      ok: true,
-      message:
-        'SMTP not configured. Use the verification URL below to simulate email verification.',
-      verificationUrl: verifyUrl,
-    });
+    return res.json({ ok: true, message: 'SMTP not configured (Test Mode)', verificationUrl: verifyUrl });
+
   } catch (err) {
-    log('ERROR', 'Subscribe endpoint error', err.message);
-    return res.status(500).json({ error: 'An unexpected error occurred. Please try again.' });
+    log('ERROR', 'Subscribe error', err.message);
+    return res.status(500).json({ error: 'Database or Server Error.' });
   }
 });
 
 // Verify endpoint
-app.get('/api/verify', (req, res) => {
+app.get('/api/verify', async (req, res) => {
   const { token } = req.query || {};
-
-  if (!token) {
-    return res.status(400).send(
-      '<html><body style="font-family:system-ui;margin:40px;"><h2>❌ Error</h2><p>Missing verification token.</p></body></html>'
-    );
-  }
+  if (!token) return res.status(400).send('Missing token');
 
   try {
-    const db = readDB();
-    const item = db.find(s => s.token === token);
+    // 1. Find user by token
+    const { data: user, error } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('token', token)
+      .single();
 
-    if (!item) {
-      log('WARN', 'Invalid verification token', token);
-      return res.status(404).send(
-        '<html><body style="font-family:system-ui;margin:40px;"><h2>❌ Token Not Found</h2><p>This verification link is invalid.</p><p><a href="/">Back to home</a></p></body></html>'
-      );
+    if (error || !user) {
+      return res.status(404).send('<h2>❌ Invalid or Unknown Token</h2>');
     }
 
-    // Check token expiry
-    if (new Date() > new Date(item.tokenExpiry)) {
-      log('WARN', 'Expired verification token', item.email);
-      return res.status(410).send(
-        '<html><body style="font-family:system-ui;margin:40px;"><h2>⏰ Link Expired</h2><p>This verification link has expired. Please subscribe again.</p><p><a href="/">Back to home</a></p></body></html>'
-      );
+    // 2. Check Expiry
+    if (new Date() > new Date(user.token_expiry)) {
+      return res.status(410).send('<h2>⏰ Token Expired</h2>');
     }
 
-    // Mark as verified
-    item.verified = true;
-    item.verifiedAt = new Date().toISOString();
-    writeDB(db);
+    // 3. Update to Verified
+    await supabase
+      .from('subscriptions')
+      .update({ verified: true, verified_at: new Date() })
+      .eq('id', user.id);
 
-    log('INFO', 'Email verified', item.email);
-
-    // Success page
     return res.send(
-      `<html>
-        <head>
-          <meta charset="utf-8">
-          <style>
-            body { font-family: 'Segoe UI', Roboto, sans-serif; color: #333; margin: 40px; }
-            .container { max-width: 500px; margin: 0 auto; text-align: center; }
-            .header h2 { color: #ff6b35; font-size: 28px; }
-            .content p { line-height: 1.6; color: #666; }
-            .button { display: inline-block; padding: 12px 24px; background: #ff6b35; color: white; text-decoration: none; border-radius: 8px; margin-top: 20px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h2>✅ Email Verified!</h2>
-            </div>
-            <div class="content">
-              <p><strong>${item.email}</strong> is now verified.</p>
-              <p>Thanks for joining the GujWear community!</p>
-              <p>We'll notify you when the new collection launches on <strong>January 1st, 2026</strong>.</p>
-              <a href="/" class="button">Return to GujWear</a>
-            </div>
-          </div>
-        </body>
-      </html>`
+      `<html><body style="font-family:sans-serif; text-align:center; margin-top:50px;">
+        <h2 style="color:#ff6b35">✅ Email Verified!</h2>
+        <p>${user.email} is now subscribed.</p>
+        <a href="/">Return Home</a>
+      </body></html>`
     );
+
   } catch (err) {
-    log('ERROR', 'Verify endpoint error', err.message);
-    return res.status(500).send(
-      '<html><body style="font-family:system-ui;margin:40px;"><h2>❌ Error</h2><p>An error occurred. Please try again.</p></body></html>'
-    );
+    log('ERROR', 'Verify error', err.message);
+    return res.status(500).send('Internal Error');
   }
 });
 
-// Admin: Get all subscriptions (protected by simple token)
-app.get('/api/admin/subscriptions', (req, res) => {
+// Admin Stats
+app.get('/api/admin/subscriptions', async (req, res) => {
   const adminToken = process.env.ADMIN_TOKEN;
   const token = req.query.token || req.headers['authorization']?.split(' ')[1];
 
   if (!adminToken || token !== adminToken) {
-    log('WARN', 'Unauthorized admin access attempt', req.ip);
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
-    const db = readDB();
-    const stats = {
-      total: db.length,
-      verified: db.filter(s => s.verified).length,
-      unverified: db.filter(s => !s.verified).length,
-      subscriptions: db,
-    };
-    log('INFO', 'Admin stats accessed');
-    return res.json(stats);
+    const { count, error } = await supabase
+      .from('subscriptions')
+      .select('*', { count: 'exact', head: true });
+    
+    if (error) throw error;
+
+    return res.json({ total_subscribers: count });
   } catch (err) {
-    log('ERROR', 'Admin stats error', err.message);
-    return res.status(500).json({ error: 'Failed to retrieve stats' });
+    return res.status(500).json({ error: err.message });
   }
-});
-
-// Notify owner immediately (sends an email to the site owner with subscriber info)
-app.post('/api/notify', async (req, res) => {
-  const ip = req.ip || req.connection.remoteAddress;
-  if (!checkRateLimit(ip)) {
-    log('WARN', 'Rate limit exceeded (notify)', ip);
-    return res.status(429).json({ error: 'Too many requests. Try again later.' });
-  }
-
-  const { email, message } = req.body || {};
-  if (!email || !isValidEmail(email)) {
-    return res.status(400).json({ error: 'Invalid email provided.' });
-  }
-
-  const ownerEmail = process.env.NOTIFY_EMAIL || process.env.SMTP_FROM || 'official@gujwear.live';
-  const subject = `New interest: ${email} — GujWear`;
-  const text = `A user has requested to be notified.\n\nEmail: ${email}\nMessage: ${message || '—'}\nIP: ${ip}\nTime: ${new Date().toISOString()}`;
-
-  if (smtpConfigured && transporter) {
-    try {
-      await transporter.sendMail({
-        from: process.env.SMTP_FROM || 'noreply@gujwear.com',
-        to: ownerEmail,
-        subject,
-        text,
-        html: `<p>A user has requested to be notified.</p><p><strong>Email:</strong> ${email}</p><p><strong>Message:</strong> ${message || '—'}</p><p><strong>IP:</strong> ${ip}</p><p><strong>Time:</strong> ${new Date().toISOString()}</p>`
-      });
-      log('INFO', 'Owner notification sent', email);
-      return res.json({ ok: true, message: 'Owner notified.' });
-    } catch (err) {
-      log('ERROR', 'Failed to send owner notification', err.message);
-      return res.status(500).json({ error: 'Failed to notify owner.' });
-    }
-  }
-
-  // SMTP not configured — write to log and return success so frontend gets immediate feedback
-  log('WARN', 'SMTP not configured — owner notification (logged)', { email, message, ip });
-  return res.json({ ok: true, message: 'Owner notification logged (SMTP not configured).' });
 });
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
-});
-
-// Error handler
-app.use((err, req, res, next) => {
-  log('ERROR', 'Unhandled error', err.message);
-  res.status(err.status || 500).json({
-    error: IS_PRODUCTION ? 'Internal server error' : err.message,
-  });
-});
-
-// === GRACEFUL SHUTDOWN ===
-process.on('SIGTERM', () => {
-  log('INFO', 'SIGTERM received, shutting down gracefully...');
-  process.exit(0);
-});
-
-process.on('SIGINT', () => {
-  log('INFO', 'SIGINT received, shutting down gracefully...');
-  process.exit(0);
-});
-
-// === START SERVER ===
-const server = app.listen(PORT, () => {
-  log('INFO', `🚀 Server running on http://localhost:${PORT}`);
-  log('INFO', `🌍 Environment: ${NODE_ENV}`);
-  log('INFO', `📧 SMTP: ${smtpConfigured ? 'Configured' : 'Not configured (test mode)'}`);
-});
-
-// Handle errors on server
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    log('ERROR', `Port ${PORT} is already in use`);
-    process.exit(1);
+  // If request is for API, return JSON
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'Endpoint not found' });
   }
-  throw err;
+  // Otherwise serve the main index.html for SPA (or just 404 page)
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// === SERVER START (FIXED FOR VERCEL) ===
+if (require.main === module) {
+  const server = app.listen(PORT, () => {
+    log('INFO', `🚀 Server running on http://localhost:${PORT}`);
+  });
+}
+
+// Export for Vercel
 module.exports = app;
