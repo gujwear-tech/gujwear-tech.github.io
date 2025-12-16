@@ -152,7 +152,55 @@ heroku open
 2. Set environment variables in dashboard
 3. Deploy automatically on push
 4. Configure custom domain in settings
+---
 
+### Deploy Backend (Option A) — Host the long-running Node server (recommended for current code)
+
+This repository includes a `Dockerfile` and `Procfile` so you can deploy the existing `server.js` as a long-running service (Railway, Render, Heroku, DigitalOcean App Platform, or your own VPS). The setup preserves the local `subscriptions.json` file — use this option if you want a simple, fast deployment without refactoring to a managed DB.
+
+Steps (Docker / Render / Railway):
+
+1. Build locally (optional):
+
+```bash
+# build image (local test)
+docker build -t gujwear-backend:latest .
+# run (exposes port 3000)
+docker run -p 3000:3000 --env-file .env gujwear-backend:latest
+```
+
+2. Deploy to Railway or Render with Docker: connect the GitHub repo and select Dockerfile deployment, or push your Docker image to a registry and link the image.
+
+3. Required environment variables (set in host dashboard):
+
+- `SMTP_HOST` - SMTP server host (e.g. smtp.sendgrid.net)
+- `SMTP_PORT` - SMTP port (587 or 465)
+- `SMTP_USER` - SMTP username
+- `SMTP_PASS` - SMTP password
+- `SMTP_FROM` - From address used for outgoing mail (e.g. noreply@gujwear.live)
+- `NOTIFY_EMAIL` - Owner notification email (defaults to official@gujwear.live)
+- `ADMIN_TOKEN` - Secure token for `/api/admin/subscriptions`
+- `CORS_ORIGIN` - Frontend origin (https://www.gujwear.live)
+- `NODE_ENV` - `production`
+- `PORT` - Optional; defaults to 3000
+
+4. Persistent storage (important):
+
+Platforms like Render and Railway provide a persistent volume option; if you want `subscriptions.json` to survive restarts, enable a persistent disk/volume and map it to the app root (or update the `DB_PATH` in `server.js` to point to a mounted folder).
+
+5. Smoke tests (once deployed):
+
+```bash
+# health
+curl https://<your-backend-url>/api/health
+
+# subscribe (test mode will return a verification URL if SMTP is not configured)
+curl -X POST https://<your-backend-url>/api/subscribe -H "Content-Type: application/json" -d '{"email":"you@example.com"}'
+```
+
+6. Update frontend: point `CORS_ORIGIN` and the subscription POST endpoint in `js/main.js` to your backend URL if you are hosting frontend and backend separately.
+
+---
 ### Deploy to Custom Server
 1. SSH into server
 2. Clone repository
