@@ -32,8 +32,21 @@
         method: 'POST', headers:{'content-type':'application/json'},
         body: JSON.stringify({ email: val })
       });
-      const data = await r.json();
-      if(!r.ok) throw new Error(data.error || data.message || 'Error');
+
+      // Safely parse response: handle empty or non-JSON responses
+      let data = null;
+      const ctype = r.headers.get('content-type') || '';
+      if (ctype.includes('application/json')) {
+        try {
+          data = await r.json();
+        } catch (err) {
+          data = { message: 'Invalid JSON response from server' };
+        }
+      } else {
+        const txt = await r.text();
+        try { data = txt ? JSON.parse(txt) : { message: '' }; } catch (e) { data = { message: txt || '' }; }
+      }
+      if (!r.ok) throw new Error(data?.error || data?.message || `Request failed (${r.status})`);
       if(data.verificationUrl){
         resp.innerHTML = `Subscription saved. (No SMTP configured) <a href="${data.verificationUrl}" target="_blank">Click to verify</a>`;
       } else {
