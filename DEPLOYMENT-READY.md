@@ -114,9 +114,10 @@ curl -X POST https://<your-vercel-url>/api/subscribe -H "Content-Type: applicati
 
 ### Email Configuration
 - [ ] **SMTP Setup**:
-  - Configure .env with SMTP credentials
-  - Test email sending with /api/subscribe endpoint
-  - Verify email templates render correctly
+  - Enable 2-Step Verification on your Gmail account.
+  - Generate an App Password at https://myaccount.google.com/apppasswords (app name: "GujWear").
+  - Set SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_SECURE=false, SMTP_USER=your-gmail@gmail.com, SMTP_PASS=16-char-password, SMTP_FROM=noreply@gujwear.live.
+  - Test email sending with /api/subscribe endpoint.
 
 - [ ] **Email Deliverability**:
   - Setup SPF record
