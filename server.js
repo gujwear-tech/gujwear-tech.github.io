@@ -8,7 +8,8 @@ const { createClient } = require('@supabase/supabase-js');
 
 // === CONFIG ===
 const PORT = process.env.PORT || 3000;
-const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; 
+const ADMIN_EMAIL = 'gujwear@gmail.com'; // <--- Admin gets notified here
 const RATE_LIMIT = {}; 
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PRODUCTION = NODE_ENV === 'production';
@@ -21,12 +22,6 @@ const supabase = (supabaseUrl && supabaseKey)
   : null;
 
 if (!supabase) console.warn('⚠️ WARNING: Supabase credentials missing.');
-
-// === LOGGER ===
-const log = (level, msg, data = '') => {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${level}: ${msg}`, data ? JSON.stringify(data) : '');
-};
 
 const app = express();
 
@@ -61,15 +56,14 @@ function checkRateLimit(ip) {
   return true;
 }
 
-// === EMAIL HELPER ===
+// === HELPER: Email Validation ===
 function isValidEmail(email) {
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return re.test(String(email).toLowerCase()) && email.length <= 254;
 }
 
-// === CUSTOM EMAIL TEMPLATE (With Logo & Insta) ===
-function getEmailTemplate(verifyUrl) {
-  // Ensure 'assets/logo.svg' exists in your project for this to work perfectly in production
+// === TEMPLATE 1: For USER (Verification) ===
+function getUserTemplate(verifyUrl) {
   const logoUrl = 'https://www.gujwear.live/assets/logo.png'; 
   const instaUrl = 'https://www.instagram.com/gujwear';
 
@@ -118,6 +112,23 @@ function getEmailTemplate(verifyUrl) {
   };
 }
 
+// === TEMPLATE 2: For ADMIN (Notification) ===
+function getAdminTemplate(userEmail, ip) {
+  return {
+    subject: `🔔 New Subscriber: ${userEmail}`,
+    html: `
+      <div style="font-family:sans-serif; padding:20px; border:1px solid #333; background:#0f2040; color:white;">
+        <h2 style="color:#ff6b35;">New Subscription!</h2>
+        <p><strong>Email:</strong> ${userEmail}</p>
+        <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+        <p><strong>IP Address:</strong> ${ip}</p>
+        <hr style="border-color:#555;">
+        <p style="font-size:12px; color:#ccc;">This is an automated alert from GujWear Live.</p>
+      </div>
+    `
+  };
+}
+
 let transporter = null;
 if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
   transporter = nodemailer.createTransport({
@@ -130,7 +141,6 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
 
 // === ROUTES ===
 
-// API: Subscribe
 app.post('/api/subscribe', async (req, res) => {
   const ip = req.ip || req.connection.remoteAddress;
   if (!checkRateLimit(ip)) return res.status(429).json({ error: 'Too many requests.' });
@@ -143,6 +153,7 @@ app.post('/api/subscribe', async (req, res) => {
     const tokenExpiry = new Date(Date.now() + TOKEN_EXPIRY_MS).toISOString();
     const verifyUrl = `${req.protocol}://${req.get('host')}/api/verify?token=${token}`;
 
+    // 1. Save to DB
     if (supabase) {
       const { data: existing } = await supabase.from('subscriptions').select('*').eq('email', email).single();
       if (existing) {
@@ -153,27 +164,35 @@ app.post('/api/subscribe', async (req, res) => {
     }
 
     if (transporter) {
-      // USE THE CUSTOM TEMPLATE HERE
-      const template = getEmailTemplate(verifyUrl);
-      
+      // 2. Send Email to USER
+      const userMail = getUserTemplate(verifyUrl);
       await transporter.sendMail({
         from: process.env.SMTP_FROM || 'noreply@gujwear.com',
         to: email,
-        subject: template.subject,
-        html: template.html
+        subject: userMail.subject,
+        html: userMail.html
       });
+
+      // 3. Send Email to ADMIN (You)
+      const adminMail = getAdminTemplate(email, ip);
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || 'noreply@gujwear.com',
+        to: ADMIN_EMAIL, // gujwear@gmail.com
+        subject: adminMail.subject,
+        html: adminMail.html
+      });
+
       return res.json({ ok: true, message: 'Check your inbox to verify.' });
     }
 
     return res.json({ ok: true, message: 'Subscription successful (Test Mode)', verificationUrl: verifyUrl });
 
   } catch (err) {
-    log('ERROR', 'Subscribe error', err.message);
+    console.error('Subscribe error:', err.message);
     return res.status(500).json({ error: 'Server Error' });
   }
 });
 
-// API: Verify
 app.get('/api/verify', async (req, res) => {
   const { token } = req.query;
   if (!token) return res.status(400).send('Missing token');
@@ -185,27 +204,22 @@ app.get('/api/verify', async (req, res) => {
       
       await supabase.from('subscriptions').update({ verified: true }).eq('id', user.id);
     }
-    // Simple HTML response for verification
     res.send(`
-      <html>
-        <body style="background:#050d1a; color:white; font-family:sans-serif; text-align:center; display:flex; flex-direction:column; justify-content:center; height:100vh; margin:0;">
-          <h1 style="color:#ff6b35;">✅ Email Verified!</h1>
-          <p>You are now on the list.</p>
-          <a href="/" style="color:white; text-decoration:underline;">Back to GujWear</a>
-        </body>
-      </html>
+      <body style="background:#050d1a; color:white; font-family:sans-serif; text-align:center; padding-top:100px;">
+        <h1 style="color:#ff6b35;">✅ Email Verified!</h1>
+        <p>You are now on the list.</p>
+        <a href="/" style="color:white;">Back to Home</a>
+      </body>
     `);
   } catch (err) {
     res.status(500).send('Error verifying.');
   }
 });
 
-// Serve Index HTML for all other routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// === SERVER START ===
 if (require.main === module) {
   app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 }
