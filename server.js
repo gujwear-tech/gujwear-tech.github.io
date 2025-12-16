@@ -228,10 +228,12 @@ app.post('/api/subscribe', async (req, res) => {
 
     const verifyUrl = `${req.protocol}://${req.get('host')}/api/verify?token=${token}`;
     const emailTemplate = getEmailTemplate(verifyUrl, email);
-
+    
     // Send email if SMTP is configured
+    const ownerEmail = process.env.NOTIFY_EMAIL || process.env.SMTP_FROM || 'official@gujwear.live';
     if (smtpConfigured && transporter) {
       try {
+        // Send verification email to subscriber
         await transporter.sendMail({
           from: process.env.SMTP_FROM || 'noreply@gujwear.com',
           to: email,
@@ -240,6 +242,21 @@ app.post('/api/subscribe', async (req, res) => {
           html: emailTemplate.html,
         });
         log('INFO', 'Verification email sent', email);
+
+        // Send owner notification (best-effort)
+        try {
+          await transporter.sendMail({
+            from: process.env.SMTP_FROM || 'noreply@gujwear.com',
+            to: ownerEmail,
+            subject: `New subscription: ${email} — GujWear`,
+            text: `New subscription:\n\nEmail: ${email}\nTime: ${new Date().toISOString()}\nIP: ${req.ip || req.connection.remoteAddress}`,
+            html: `<p>New subscription</p><p><strong>Email:</strong> ${email}</p><p><strong>Time:</strong> ${new Date().toISOString()}</p><p><strong>IP:</strong> ${req.ip || req.connection.remoteAddress}</p>`
+          });
+          log('INFO', 'Owner notification sent (subscribe)', email);
+        } catch (ownerErr) {
+          log('WARN', 'Failed to send owner notification (subscribe)', ownerErr.message);
+        }
+
         return res.json({
           ok: true,
           message: 'Verification email sent! Check your inbox.',
@@ -378,7 +395,7 @@ app.post('/api/notify', async (req, res) => {
     return res.status(400).json({ error: 'Invalid email provided.' });
   }
 
-  const ownerEmail = process.env.NOTIFY_EMAIL || process.env.SMTP_FROM || 'gujwear@gmail.com';
+  const ownerEmail = process.env.NOTIFY_EMAIL || process.env.SMTP_FROM || 'official@gujwear.live';
   const subject = `New interest: ${email} — GujWear`;
   const text = `A user has requested to be notified.\n\nEmail: ${email}\nMessage: ${message || '—'}\nIP: ${ip}\nTime: ${new Date().toISOString()}`;
 
