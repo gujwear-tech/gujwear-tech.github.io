@@ -4,16 +4,6 @@
   "env": {
     "NODE_ENV": "production"
   },
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "$1"
-    },
-    {
-      "src": "/(?!api|assets|css|js|site\\.webmanifest|robots\\.txt|sitemap\\.xml|_redirects|browserconfig|manifest)(.*)",
-      "dest": "/index.html"
-    }
-  ],
   "headers": [
     {
       "source": "/(.*)",
