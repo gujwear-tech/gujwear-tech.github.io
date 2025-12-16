@@ -1,10 +1,17 @@
 :root{
   --bg1:#050d1a; --bg2:#0a1628; --bg3:#0f2040;
   --accent:#ff6b35; --accent-light:#ff8a5c; --accent-dark:#e55a24;
-  --muted:#9aa7b2; --muted-light:#b5c2ce;
+  --accent-lighter:#ffb380; --accent-darker:#d94710;
+  --muted:#9aa7b2; --muted-light:#b5c2ce; --muted-dark:#7a8a97;
+  --success:#06d6a0; --success-light:#2fe8b8; --warning:#ffa500;
   --grad-bg: linear-gradient(135deg, #050d1a 0%, #0a1628 40%, #0f2040 100%);
   --grad-card: linear-gradient(135deg, rgba(255,107,53,0.08) 0%, rgba(15,32,64,0.04) 100%);
   --grad-accent: linear-gradient(135deg, #ff6b35 0%, #ff8a5c 100%);
+  --grad-premium: linear-gradient(135deg, rgba(255,107,53,0.15) 0%, rgba(255,180,128,0.08) 50%, rgba(15,32,64,0.08) 100%);
+  --shadow-sm: 0 4px 12px rgba(0,0,0,0.2);
+  --shadow-md: 0 12px 30px rgba(0,0,0,0.3);
+  --shadow-lg: 0 20px 60px rgba(0,0,0,0.4);
+  --shadow-glow: 0 0 40px rgba(255,107,53,0.15);
 }
 
 *{box-sizing:border-box}
