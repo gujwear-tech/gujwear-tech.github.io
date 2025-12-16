@@ -11,9 +11,11 @@
   "scripts": {
     "start": "NODE_ENV=production node server.js",
     "dev": "NODE_ENV=development node server.js",
-    "build": "npm run build:css && npm run build:js",
+    "build": "npm run build:favicons && npm run build:css && npm run build:js && npm run build:verify",
+    "build:favicons": "node scripts/generate-favicons.js",
     "build:css": "echo 'CSS already optimized in production'",
     "build:js": "echo 'JS already optimized in production'",
+    "build:verify": "test -f index.html && test -f server.js && echo '✓ Build complete: static files verified'",
     "test": "echo 'Tests pass' && exit 0",
     "lint": "echo 'Linting complete' && exit 0",
     "prestart": "npm run build"
