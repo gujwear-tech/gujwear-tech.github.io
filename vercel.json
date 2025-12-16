@@ -4,6 +4,12 @@
   "env": {
     "NODE_ENV": "production"
   },
+  "rewrites": [
+    {
+      "source": "/((?!api|assets|css|js|site\\.webmanifest|robots\\.txt|sitemap\\.xml|_redirects|browserconfig|manifest).*)",
+      "destination": "/index.html"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
