@@ -10,6 +10,30 @@
 - **Date**: December 16, 2025
 
 ---
+---
+
+### Deploy Backend (Option B) — Serverless + Supabase (Vercel-friendly)
+
+If you prefer an all-serverless deployment (host frontend on Vercel and use serverless API routes), migrate the storage from `subscriptions.json` to Supabase. This repo includes example serverless endpoints under `/api/*` that use Supabase — set the required env vars below and deploy.
+
+Required environment variables for Option B:
+
+- `SUPABASE_URL` - Your Supabase project URL
+- `SUPABASE_KEY` - Service role key (or anon key for limited writes) — keep this secret
+- `SUBSCRIPTIONS_TABLE` - Table name (default: `subscriptions`)
+- `FRONTEND_URL` - Public frontend URL (e.g. https://www.gujwear.live) used to build verification links
+- `SMTP_*` - Optional SMTP_* vars if you want serverless to send emails
+- `NOTIFY_EMAIL`, `ADMIN_TOKEN`, `CORS_ORIGIN`, `NODE_ENV`
+
+Notes:
+- Serverless functions are stateless. Simple in-memory rate-limiting from the long-running server will not persist across invocations. Use Supabase row-level limits, Cloudflare Workers, or API Gateway rate-limiting rules for production protection.
+- Create a Supabase `subscriptions` table with columns: `id (uuid, PK)`, `email (text, unique)`, `token (text)`, `token_expiry (timestamptz)`, `verified (boolean)`, `created_at (timestamptz)`, `verified_at (timestamptz)`, `last_attempt_at (timestamptz)`.
+- After deploying, test endpoints:
+
+```bash
+curl https://<your-vercel-url>/api/health
+curl -X POST https://<your-vercel-url>/api/subscribe -H "Content-Type: application/json" -d '{"email":"you@example.com"}'
+```
 
 ## ✅ Completed Features
 
