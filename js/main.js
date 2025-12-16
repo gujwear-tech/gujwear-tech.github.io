@@ -24,6 +24,8 @@
     if(!val || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val)){
       resp.textContent = 'Please enter a valid email.'; resp.style.color = '#ffb4b4'; return;
     }
+    const btn = form.querySelector('button');
+    if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
     resp.textContent = 'Sending verification...'; resp.style.color = '#fff';
     try{
       const r = await fetch('/api/subscribe', {
@@ -39,9 +41,14 @@
       }
       resp.style.color = '#a6f0c6';
       email.value = '';
+      // Notify owner immediately (best-effort)
+      try{
+        await fetch('/api/notify', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ email: val, message: 'User clicked Notify Me' }) });
+      }catch(e){ console.warn('Owner notify failed', e); }
     }catch(err){
       resp.textContent = err.message || 'Failed to subscribe'; resp.style.color = '#ffb4b4';
     }
+    if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
   });
 
   // Subtle particle background

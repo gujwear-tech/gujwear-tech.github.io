@@ -365,6 +365,45 @@ app.get('/api/admin/subscriptions', (req, res) => {
   }
 });
 
+// Notify owner immediately (sends an email to the site owner with subscriber info)
+app.post('/api/notify', async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  if (!checkRateLimit(ip)) {
+    log('WARN', 'Rate limit exceeded (notify)', ip);
+    return res.status(429).json({ error: 'Too many requests. Try again later.' });
+  }
+
+  const { email, message } = req.body || {};
+  if (!email || !isValidEmail(email)) {
+    return res.status(400).json({ error: 'Invalid email provided.' });
+  }
+
+  const ownerEmail = process.env.NOTIFY_EMAIL || process.env.SMTP_FROM || 'gujwear@gmail.com';
+  const subject = `New interest: ${email} — GujWear`;
+  const text = `A user has requested to be notified.\n\nEmail: ${email}\nMessage: ${message || '—'}\nIP: ${ip}\nTime: ${new Date().toISOString()}`;
+
+  if (smtpConfigured && transporter) {
+    try {
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || 'noreply@gujwear.com',
+        to: ownerEmail,
+        subject,
+        text,
+        html: `<p>A user has requested to be notified.</p><p><strong>Email:</strong> ${email}</p><p><strong>Message:</strong> ${message || '—'}</p><p><strong>IP:</strong> ${ip}</p><p><strong>Time:</strong> ${new Date().toISOString()}</p>`
+      });
+      log('INFO', 'Owner notification sent', email);
+      return res.json({ ok: true, message: 'Owner notified.' });
+    } catch (err) {
+      log('ERROR', 'Failed to send owner notification', err.message);
+      return res.status(500).json({ error: 'Failed to notify owner.' });
+    }
+  }
+
+  // SMTP not configured — write to log and return success so frontend gets immediate feedback
+  log('WARN', 'SMTP not configured — owner notification (logged)', { email, message, ip });
+  return res.json({ ok: true, message: 'Owner notification logged (SMTP not configured).' });
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
