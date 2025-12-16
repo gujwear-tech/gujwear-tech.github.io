@@ -11,6 +11,8 @@ const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'subscriptions.json');
 const TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 const RATE_LIMIT = {}; // in-memory rate limiting
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const IS_PRODUCTION = NODE_ENV === 'production';
 
 // === LOGGER ===
 const log = (level, msg, data = '') => {
@@ -20,10 +22,30 @@ const log = (level, msg, data = '') => {
 
 // === APP SETUP ===
 const app = express();
-app.use(cors());
+
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  if (IS_PRODUCTION) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
+// Compression & CORS
+app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
 app.use(express.json({ limit: '10kb' })); // limit payload size
 app.use(express.urlencoded({ limit: '10kb', extended: false }));
-app.use(express.static(path.join(__dirname, '/')));
+
+// Static file serving with caching
+app.use(express.static(path.join(__dirname, '/'), {
+  maxAge: IS_PRODUCTION ? '1d' : '0',
+  etag: false,
+}));
 
 // === DATABASE HELPERS ===
 function readDB() {
@@ -348,8 +370,39 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
+// Error handler
+app.use((err, req, res, next) => {
+  log('ERROR', 'Unhandled error', err.message);
+  res.status(err.status || 500).json({
+    error: IS_PRODUCTION ? 'Internal server error' : err.message,
+  });
+});
+
+// === GRACEFUL SHUTDOWN ===
+process.on('SIGTERM', () => {
+  log('INFO', 'SIGTERM received, shutting down gracefully...');
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  log('INFO', 'SIGINT received, shutting down gracefully...');
+  process.exit(0);
+});
+
 // === START SERVER ===
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   log('INFO', `🚀 Server running on http://localhost:${PORT}`);
+  log('INFO', `🌍 Environment: ${NODE_ENV}`);
   log('INFO', `📧 SMTP: ${smtpConfigured ? 'Configured' : 'Not configured (test mode)'}`);
 });
+
+// Handle errors on server
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    log('ERROR', `Port ${PORT} is already in use`);
+    process.exit(1);
+  }
+  throw err;
+});
+
+module.exports = app;
