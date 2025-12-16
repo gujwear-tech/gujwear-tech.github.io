@@ -45,8 +45,7 @@ app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
 app.use(express.json({ limit: '10kb' })); 
 app.use(express.urlencoded({ limit: '10kb', extended: false }));
 
-// === CRITICAL FIX: Static Files ===
-// Serve static files correctly from root, css, js, and assets folders
+// === STATIC FILES ===
 app.use(express.static(__dirname)); 
 app.use('/css', express.static(path.join(__dirname, 'css')));
 app.use('/js', express.static(path.join(__dirname, 'js')));
@@ -66,6 +65,57 @@ function checkRateLimit(ip) {
 function isValidEmail(email) {
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return re.test(String(email).toLowerCase()) && email.length <= 254;
+}
+
+// === CUSTOM EMAIL TEMPLATE (With Logo & Insta) ===
+function getEmailTemplate(verifyUrl) {
+  // Ensure 'assets/logo.svg' exists in your project for this to work perfectly in production
+  const logoUrl = 'https://www.gujwear.live/assets/logo.svg'; 
+  const instaUrl = 'https://www.instagram.com/gujwear';
+
+  return {
+    subject: '🚀 You’re on the list! Verify your GujWear subscription',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+            .container { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+            .header { background: #0f2040; padding: 40px 20px; text-align: center; }
+            .header img { width: 80px; height: 80px; border-radius: 12px; }
+            .header h1 { color: #ff6b35; margin: 15px 0 0; font-size: 24px; letter-spacing: 2px; text-transform: uppercase; }
+            .content { padding: 40px 30px; text-align: center; color: #333; }
+            .button { 
+              display: inline-block; margin: 25px 0; padding: 16px 40px; 
+              background: linear-gradient(135deg, #ff6b35 0%, #ff8a5c 100%);
+              color: white !important; text-decoration: none; border-radius: 50px; 
+              font-weight: bold; font-size: 16px;
+            }
+            .footer { background: #f4f4f4; padding: 20px; text-align: center; font-size: 12px; color: #888; }
+            .footer a { color: #ff6b35; text-decoration: none; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <img src="${logoUrl}" alt="GujWear Logo">
+              <h1>GujWear</h1>
+            </div>
+            <div class="content">
+              <h2>Verify Your Email</h2>
+              <p>Thanks for joining. You are one step away from exclusive access to our launch on <strong>Jan 1st, 2026</strong>.</p>
+              <a href="${verifyUrl}" class="button">Verify Now</a>
+              <p style="margin-top: 30px; font-size: 14px;">Follow us for daily drops: <br> <a href="${instaUrl}" style="color: #0f2040; font-weight: bold; text-decoration: none;">@gujwear</a></p>
+            </div>
+            <div class="footer">
+              <p>Authentic Style. GujWear Pride.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `
+  };
 }
 
 let transporter = null;
@@ -95,7 +145,6 @@ app.post('/api/subscribe', async (req, res) => {
 
     if (supabase) {
       const { data: existing } = await supabase.from('subscriptions').select('*').eq('email', email).single();
-      
       if (existing) {
         await supabase.from('subscriptions').update({ token, token_expiry: tokenExpiry }).eq('email', email);
       } else {
@@ -104,11 +153,14 @@ app.post('/api/subscribe', async (req, res) => {
     }
 
     if (transporter) {
+      // USE THE CUSTOM TEMPLATE HERE
+      const template = getEmailTemplate(verifyUrl);
+      
       await transporter.sendMail({
         from: process.env.SMTP_FROM || 'noreply@gujwear.com',
         to: email,
-        subject: 'Verify Your Email — GujWear',
-        html: `<a href="${verifyUrl}">Click here to verify</a>`
+        subject: template.subject,
+        html: template.html
       });
       return res.json({ ok: true, message: 'Check your inbox to verify.' });
     }
@@ -133,13 +185,22 @@ app.get('/api/verify', async (req, res) => {
       
       await supabase.from('subscriptions').update({ verified: true }).eq('id', user.id);
     }
-    res.send('<h1>✅ Email Verified!</h1><a href="/">Back to Home</a>');
+    // Simple HTML response for verification
+    res.send(`
+      <html>
+        <body style="background:#050d1a; color:white; font-family:sans-serif; text-align:center; display:flex; flex-direction:column; justify-content:center; height:100vh; margin:0;">
+          <h1 style="color:#ff6b35;">✅ Email Verified!</h1>
+          <p>You are now on the list.</p>
+          <a href="/" style="color:white; text-decoration:underline;">Back to GujWear</a>
+        </body>
+      </html>
+    `);
   } catch (err) {
     res.status(500).send('Error verifying.');
   }
 });
 
-// Serve Index HTML for all other routes (SPA support)
+// Serve Index HTML for all other routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
