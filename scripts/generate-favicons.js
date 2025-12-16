@@ -2,37 +2,25 @@ const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
 
-const ACCENT_COLOR = '#ff6b35';
-const BG_COLOR = '#050d1a';
-
-// SVG favicon template with GW monogram
-const svgTemplate = (size) => `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background -->
-  <rect width="${size}" height="${size}" fill="${BG_COLOR}"/>
-  
-  <!-- Gradient circle background -->
-  <defs>
-    <radialGradient id="grad" cx="50%" cy="50%">
-      <stop offset="0%" style="stop-color:${ACCENT_COLOR};stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#ff5722;stop-opacity:1" />
-    </radialGradient>
-  </defs>
-  
-  <!-- Circle -->
-  <circle cx="${size/2}" cy="${size/2}" r="${size * 0.4}" fill="url(#grad)"/>
-  
-  <!-- Text "GW" -->
-  <text x="${size/2}" y="${size/2 + size * 0.15}" 
-        font-family="Arial, sans-serif" 
-        font-size="${Math.floor(size * 0.5)}" 
-        font-weight="bold"
-        fill="white" 
-        text-anchor="middle"
-        dominant-baseline="middle">GW</text>
-</svg>`;
-
 async function generateFavicons() {
+  const logoPaths = [
+    path.join(__dirname, '..', 'assets', 'logo.png'),
+  ];
+  
+  // Find which logo path exists
+  let logoPath = null;
+  for (const p of logoPaths) {
+    if (fs.existsSync(p)) {
+      logoPath = p;
+      break;
+    }
+  }
+  
+  if (!logoPath) {
+    console.error('❌ Error: logo.png not found in assets/');
+    process.exit(1);
+  }
+
   const sizes = [
     { name: 'favicon-16x16.png', size: 16 },
     { name: 'favicon-32x32.png', size: 32 },
@@ -42,29 +30,38 @@ async function generateFavicons() {
   ];
 
   try {
+    console.log(`📦 Using logo from: ${logoPath}`);
+    
     for (const { name, size } of sizes) {
-      const svg = svgTemplate(size);
-      const outputPath = path.join(__dirname, '..', name);
+      const outputPath = path.join(__dirname, '..', 'assets', name);
       
-      await sharp(Buffer.from(svg))
+      await sharp(logoPath)
+        .resize(size, size, {
+          fit: 'contain',
+          background: { r: 5, g: 13, b: 26, alpha: 1 } // #050d1a background
+        })
         .png()
         .toFile(outputPath);
       
-      console.log(`✓ Created ${name} (${size}x${size})`);
+      console.log(`✓ Created assets/${name} (${size}x${size})`);
     }
 
-    // Create favicon.ico from 16x16
-    const favicon16Path = path.join(__dirname, '..', 'favicon-16x16.png');
-    const faviconIcoPath = path.join(__dirname, '..', 'favicon.ico');
+    // Create favicon.ico from 32x32 version (better detail at small sizes)
+    const favicon32Path = path.join(__dirname, '..', 'assets', 'favicon-32x32.png');
+    const faviconIcoPath = path.join(__dirname, '..', 'assets', 'favicon.ico');
     
-    await sharp(favicon16Path)
-      .resize(32, 32)
+    await sharp(favicon32Path)
+      .resize(64, 64, {
+        fit: 'contain',
+        background: { r: 5, g: 13, b: 26, alpha: 1 }
+      })
+      .png()
       .toFile(faviconIcoPath);
     
-    console.log(`✓ Created favicon.ico`);
-    console.log('\n🎉 All favicons generated successfully!');
+    console.log(`✓ Created assets/favicon.ico`);
+    console.log('\n✅ All favicons generated from logo.png!');
   } catch (err) {
-    console.error('Error generating favicons:', err);
+    console.error('❌ Error generating favicons:', err.message);
     process.exit(1);
   }
 }

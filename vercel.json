@@ -14,7 +14,7 @@
       "dest": "$1"
     },
     {
-      "src": "/(?!api|assets|css|js|favicon|apple-touch|site\\.webmanifest|robots\\.txt|sitemap\\.xml|_redirects|browserconfig|manifest)(.*)",
+      "src": "/(?!api|assets|css|js|site\\.webmanifest|robots\\.txt|sitemap\\.xml|_redirects|browserconfig|manifest)(.*)",
       "dest": "/index.html"
     }
   ],
@@ -54,7 +54,7 @@
       ]
     },
     {
-      "source": "/favicon\\.(ico|png)$",
+      "source": "/assets/favicon\\.(ico|png)$",
       "headers": [
         {
           "key": "Cache-Control",
