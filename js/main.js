@@ -1,8 +1,7 @@
 // Countdown + simple particle background + subscribe simulation
 (function(){
-  // Countdown
-  const launch = new Date();
-  launch.setMonth(launch.getMonth()+1); // default: one month from now
+  // Countdown (target: 2026-01-01 00:00:00 UTC)
+  const launch = new Date('2026-01-01T00:00:00Z');
   const cdEl = document.getElementById('countdown');
   function updateCountdown(){
     const now = new Date();
@@ -15,19 +14,34 @@
   }
   updateCountdown(); setInterval(updateCountdown,1000);
 
-  // Subscribe form handling (no backend) - show friendly message
+  // Subscribe form handling wired to backend
   const form = document.getElementById('subscribe');
   const email = document.getElementById('email');
   const resp = document.getElementById('response');
-  form.addEventListener('submit', (e)=>{
+  form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const val = email.value.trim();
     if(!val || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val)){
       resp.textContent = 'Please enter a valid email.'; resp.style.color = '#ffb4b4'; return;
     }
-    // simulate success
-    resp.textContent = 'Thanks — you are on the list! We will notify you.'; resp.style.color = '#a6f0c6';
-    email.value = '';
+    resp.textContent = 'Sending verification...'; resp.style.color = '#fff';
+    try{
+      const r = await fetch('/api/subscribe', {
+        method: 'POST', headers:{'content-type':'application/json'},
+        body: JSON.stringify({ email: val })
+      });
+      const data = await r.json();
+      if(!r.ok) throw new Error(data.error || data.message || 'Error');
+      if(data.verificationUrl){
+        resp.innerHTML = `Subscription saved. (No SMTP configured) <a href="${data.verificationUrl}" target="_blank">Click to verify</a>`;
+      } else {
+        resp.textContent = data.message || 'Check your inbox for a verification email.';
+      }
+      resp.style.color = '#a6f0c6';
+      email.value = '';
+    }catch(err){
+      resp.textContent = err.message || 'Failed to subscribe'; resp.style.color = '#ffb4b4';
+    }
   });
 
   // Subtle particle background

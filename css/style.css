@@ -1,6 +1,12 @@
 :root{
-  --bg1:#0f1724; --bg2:#0b1220; --accent:#ff6b35; --muted:#9aa7b2;
+  --bg1:#081226; --bg2:#071423; --accent:#ff6b35; --muted:#9aa7b2;
+  --grad1: linear-gradient(120deg,#0b1220,#071423 40%,#0f2a3a);
 }
+body{background:radial-gradient(1200px 600px at 10% 10%, rgba(255,107,53,0.06), transparent), linear-gradient(160deg,var(--bg1),var(--bg2));}
+
+/* subtle shimmer */
+.card::after{content:'';position:absolute;inset:0;border-radius:16px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.015),transparent);pointer-events:none;mix-blend-mode:overlay}
+
 *{box-sizing:border-box}
 html,body{height:100%}
 body{
@@ -19,6 +25,12 @@ body{
 .card{transition:transform 160ms ease, box-shadow 160ms ease;transform-style:preserve-3d}
 .card:hover{transform:translateY(-6px) scale(1.01);box-shadow:0 20px 40px rgba(2,6,23,0.7)}
 @keyframes float{0%{transform:translateY(0)}50%{transform:translateY(-8px)}100%{transform:translateY(0)}}
+
+/* hanging shirt swing */
+.hanger{width:92px;display:flex;align-items:flex-start;justify-content:center}
+.hanging-shirt{width:72px;height:auto;transform-origin:top center;animation:swing 2.6s ease-in-out infinite}
+@keyframes swing{0%{transform:rotate(-6deg)}50%{transform:rotate(8deg)}100%{transform:rotate(-6deg)}}
+
 .tag{color:var(--muted);margin:16px 0}
 .countdown{font-weight:600;font-size:20px;margin:8px 0;color:#fff}
 .subscribe{display:flex;gap:8px;margin-top:12px}
